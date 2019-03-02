@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">MyBooks</string>
+    <string name="action_insert_data">Insert Data</string>
+
+    <string name="action_delete_all_entries">Delete All Books</string>
+
+    <string name="editor_activity_title_new_pet">Add a Book</string>
+
+
+    <string name="action_save">Save</string>
+
+    <string name="action_delete">Delete</string>
+
+    <string name="category_overview">Overview</string>
+
+    <string name="category_supplier">Supplier</string>
+
+
+    <string name="hint_book_name">Name</string>
+    <string name="hint_book_quantity">Quantity</string>
+
+    <string name="hint_book_price">price</string>
+
+    <string name="hint_supplier_phone">Phone Number</string>
+
+
+    <string name="supplier_unknown">Unknown</string>
+
+    <string name="supplier_jarir">Jarir</string>
+
+    <string name="supplier_Nashron">Nashron</string>
+</resources>
