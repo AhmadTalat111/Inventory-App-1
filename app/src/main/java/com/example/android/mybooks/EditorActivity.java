@@ -1,9 +1,12 @@
 package com.example.android.mybooks;
 
+import android.content.ContentValues;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.support.v4.app.NavUtils;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -11,26 +14,23 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.Spinner;
+import android.widget.Toast;
+
+import com.example.android.mybooks.data.BookContract;
+import com.example.android.mybooks.data.BookDbHelper;
 
 public class EditorActivity extends AppCompatActivity {
 
-    /** EditText field to enter the pet's name */
     private EditText mNameEditText;
 
-    /** EditText field to enter the pet's breed */
     private EditText mPriceEditText;
 
-    /** EditText field to enter the pet's weight */
     private EditText mQuantityEditText;
 
-    /** EditText field to enter the pet's gender */
     private Spinner mSupplierSpinner;
     private EditText mSupplierPhoneEditText;
 
-    /**
-     * Gender of the pet. The possible values are:
-     * 0 for unknown gender, 1 for male, 2 for female.
-     */
+
     private int mSupplier = 0;
 
     @Override
@@ -48,9 +48,7 @@ public class EditorActivity extends AppCompatActivity {
         setupSpinner();
     }
 
-    /**
-     * Setup the dropdown spinner that allows the user to select the gender of the pet.
-     */
+
     private void setupSpinner() {
         // Create adapter for spinner. The list options are from the String array it will use
         // the spinner will use the default layout
@@ -85,6 +83,41 @@ public class EditorActivity extends AppCompatActivity {
                 mSupplier = 0; // Unknown
             }
         });
+    }
+
+    private void insertProduct() {
+        String bookNameString = mNameEditText.getText().toString().trim();
+
+        String bookPriceString = mPriceEditText.getText().toString().trim();
+        int bookPriceInteger = Integer.parseInt(bookPriceString);
+
+        String bookQuantityString = mQuantityEditText.getText().toString().trim();
+        int bookQuantityInteger = Integer.parseInt(bookQuantityString);
+
+        String bookSupplierPhoneNumberString = mSupplierPhoneEditText.getText().toString().trim();
+        int supplierPhoneNumberInteger = Integer.parseInt(bookSupplierPhoneNumberString);
+
+        BookDbHelper mDbHelper = new BookDbHelper(this);
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+
+
+        ContentValues values = new ContentValues();
+        values.put(BookContract.BookEntry.COLUMN_BOOK_NAME, bookNameString);
+        values.put(BookContract.BookEntry.COLUMN_BOOK_PRICE, bookPriceInteger);
+        values.put(BookContract.BookEntry.COLUMN_BOOK_QUANTITY, bookQuantityInteger);
+        values.put(BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME, mSupplier);
+        values.put(BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER, supplierPhoneNumberInteger);
+
+        long newRowId = db.insert(BookContract.BookEntry.TABLE_NAME, null, values);
+
+        if (newRowId == -1) {
+            Toast.makeText(this, "Error with saving product", Toast.LENGTH_SHORT).show();
+            Log.d("Error message", "Doesn't insert row on table");
+
+        } else {
+            Toast.makeText(this, "Product saved with row id: " + newRowId, Toast.LENGTH_SHORT).show();
+            Log.d("successfully message", "insert row on table");
+        }
     }
 
     @Override
