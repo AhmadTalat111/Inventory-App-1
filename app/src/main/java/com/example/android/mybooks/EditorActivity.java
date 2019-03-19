@@ -1,12 +1,12 @@
 package com.example.android.mybooks;
 
 import android.content.ContentValues;
-import android.database.sqlite.SQLiteDatabase;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.NavUtils;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -16,8 +16,7 @@ import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
 
-import com.example.android.mybooks.data.BookContract;
-import com.example.android.mybooks.data.BookDbHelper;
+import com.example.android.mybooks.data.BookContract.BookEntry;
 
 public class EditorActivity extends AppCompatActivity {
 
@@ -37,6 +36,14 @@ public class EditorActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_editor);
+        Intent intent = getIntent();
+        Uri currentBookUri = intent.getData();
+
+        if(currentBookUri == null){
+            setTitle(R.string.editor_activity_title_new_book);
+        } else {
+            setTitle(R.string.editor_activity_title_edit_book);
+        }
 
         // Find all relevant views that we will need to read user input from
         mNameEditText = (EditText) findViewById(R.id.edit_book_name);
@@ -97,26 +104,24 @@ public class EditorActivity extends AppCompatActivity {
         String bookSupplierPhoneNumberString = mSupplierPhoneEditText.getText().toString().trim();
         int supplierPhoneNumberInteger = Integer.parseInt(bookSupplierPhoneNumberString);
 
-        BookDbHelper mDbHelper = new BookDbHelper(this);
-        SQLiteDatabase db = mDbHelper.getWritableDatabase();
 
 
         ContentValues values = new ContentValues();
-        values.put(BookContract.BookEntry.COLUMN_BOOK_NAME, bookNameString);
-        values.put(BookContract.BookEntry.COLUMN_BOOK_PRICE, bookPriceInteger);
-        values.put(BookContract.BookEntry.COLUMN_BOOK_QUANTITY, bookQuantityInteger);
-        values.put(BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME, mSupplier);
-        values.put(BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER, supplierPhoneNumberInteger);
+        values.put(BookEntry.COLUMN_BOOK_NAME, bookNameString);
+        values.put(BookEntry.COLUMN_BOOK_PRICE, bookPriceInteger);
+        values.put(BookEntry.COLUMN_BOOK_QUANTITY, bookQuantityInteger);
+        values.put(BookEntry.COLUMN_BOOK_SUPPLIER_NAME, mSupplier);
+        values.put(BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER, supplierPhoneNumberInteger);
 
-        long newRowId = db.insert(BookContract.BookEntry.TABLE_NAME, null, values);
+        Uri newUri = getContentResolver().insert(BookEntry.CONTENT_URI, values);
 
-        if (newRowId == -1) {
-            Toast.makeText(this, "Error with saving product", Toast.LENGTH_SHORT).show();
-            Log.d("Error message", "Doesn't insert row on table");
+        if (newUri == null) {
+            Toast.makeText(this, getString(R.string.editor_insert_book_failed),
+                    Toast.LENGTH_SHORT).show();
 
         } else {
-            Toast.makeText(this, "Product saved with row id: " + newRowId, Toast.LENGTH_SHORT).show();
-            Log.d("successfully message", "insert row on table");
+            Toast.makeText(this, getString(R.string.editor_insert_book_successful),
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -134,7 +139,7 @@ public class EditorActivity extends AppCompatActivity {
         switch (item.getItemId()) {
             // Respond to a click on the "Save" menu option
             case R.id.action_save:
-                // Do nothing for now
+                insertProduct();
                 return true;
             // Respond to a click on the "Delete" menu option
             case R.id.action_delete:

@@ -4,7 +4,9 @@
 
     <string name="action_delete_all_entries">Delete All Books</string>
 
-    <string name="editor_activity_title_new_pet">Add a Book</string>
+    <string name="editor_activity_title_new_book">Add a Book</string>
+    <string name="editor_activity_title_edit_book">Edit a Book</string>
+
 
 
     <string name="action_save">Save</string>
@@ -29,4 +31,12 @@
     <string name="supplier_jarir">Jarir</string>
 
     <string name="supplier_Nashron">Nashron</string>
+
+    <string name="editor_insert_book_successful">Book saved</string>
+
+    <string name="editor_insert_book_failed">Error with saving Book</string>
+
+    <string name="empty_view_title_text">It\'s a bit lonely here...</string>
+
+    <string name="empty_view_subtitle_text">Get started by adding a book</string>
 </resources>

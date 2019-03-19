@@ -1,21 +1,27 @@
 package com.example.android.mybooks;
 
+import android.app.LoaderManager;
+import android.content.ContentUris;
+import android.content.ContentValues;
+import android.content.CursorLoader;
 import android.content.Intent;
+import android.content.Loader;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.TextView;
+import android.widget.AdapterView;
+import android.widget.ListView;
 
-import com.example.android.mybooks.data.BookContract;
-import com.example.android.mybooks.data.BookDbHelper;
+import static com.example.android.mybooks.data.BookContract.BookEntry;
 
-public class CatalogActivity extends AppCompatActivity {
-    private BookDbHelper mDbHelper;
+public class CatalogActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor> {
+    private static final int BOOK_LOADER = 0;
+    BookCursorAdapter mCursorAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,76 +35,40 @@ public class CatalogActivity extends AppCompatActivity {
                 startActivity(intent);
             }
         });
-        mDbHelper = new BookDbHelper(this);
+        ListView bookListView = (ListView) findViewById(R.id.list);
 
-    }
+        View emptyView = findViewById(R.id.empty_view);
+        bookListView.setEmptyView(emptyView);
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        displayDatabaseInfo();
-    }
-
-    private void displayDatabaseInfo() {
-        SQLiteDatabase db = mDbHelper.getReadableDatabase();
-
-        String[] projection = {
-                BookContract.BookEntry._ID,
-                BookContract.BookEntry.COLUMN_BOOK_NAME,
-                BookContract.BookEntry.COLUMN_BOOK_PRICE,
-                BookContract.BookEntry.COLUMN_BOOK_QUANTITY,
-                BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME,
-                BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER
-        };
-        Cursor cursor = db.query(
-                BookContract.BookEntry.TABLE_NAME,
-                projection,
-                null,
-                null,
-                null,
-                null,
-                null);
-
-        TextView displayView = (TextView) findViewById(R.id.text_view_book);
-
-        try {
-            displayView.setText("Inventory contains : " + cursor.getCount() + " books.\n\n");
-
-            displayView.append(
-                    BookContract.BookEntry._ID + " | " +
-                            BookContract.BookEntry.COLUMN_BOOK_NAME + " | " +
-                            BookContract.BookEntry.COLUMN_BOOK_PRICE + " | " +
-                            BookContract.BookEntry.COLUMN_BOOK_QUANTITY + " | " +
-                            BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME + " | " +
-                            BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER + "\n");
-
-            int idColumnIndex = cursor.getColumnIndex(BookContract.BookEntry._ID);
-            int nameColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_BOOK_NAME);
-            int priceColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_BOOK_PRICE);
-            int quantityColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_BOOK_QUANTITY);
-            int supplierNameColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME);
-            int supplierPhoneColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER);
-            while (cursor.moveToNext()) {
-                int currentID = cursor.getInt(idColumnIndex);
-                String currentName = cursor.getString(nameColumnIndex);
-                int currentPrice = cursor.getInt(priceColumnIndex);
-                int currentQuantity = cursor.getInt(quantityColumnIndex);
-                int currentSupplierName = cursor.getInt(supplierNameColumnIndex);
-                int currentSupplierPhone = cursor.getInt(supplierPhoneColumnIndex);
-
-                displayView.append(("\n" + currentID + " - " +
-                        currentName + " - " +
-                        currentPrice + " - " +
-                        currentQuantity + " - " +
-                        currentSupplierName + " - " +
-                        currentSupplierPhone));
+        mCursorAdapter = new BookCursorAdapter(this, null);
+        bookListView.setAdapter(mCursorAdapter);
+        bookListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int position, long id) {
+                Intent intent = new Intent(CatalogActivity.this, EditorActivity.class);
+                Uri currentBookUri = ContentUris.withAppendedId(BookEntry.CONTENT_URI, id);
+                intent.setData(currentBookUri);
+                startActivity(intent);
             }
-
-        } finally {
-            cursor.close();
-        }
+        });
+        getLoaderManager().initLoader(BOOK_LOADER, null, this);
     }
 
+
+    private void insertBook() {
+        ContentValues values = new ContentValues();
+        values.put(BookEntry.COLUMN_BOOK_NAME, "Beauty");
+        values.put(BookEntry.COLUMN_BOOK_PRICE, 50);
+        values.put(BookEntry.COLUMN_BOOK_QUANTITY, 25);
+        values.put(BookEntry.COLUMN_BOOK_SUPPLIER_NAME, BookEntry.SUPPLIER_NASHRON);
+        values.put(BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER, 1234567);
+
+        // Insert a new row for Toto into the provider using the ContentResolver.
+        // Use the {@link PetEntry#CONTENT_URI} to indicate that we want to insert
+        // into the pets database table.
+        // Receive the new content URI that will allow us to access Toto's data in the future.
+        Uri newUri = getContentResolver().insert(BookEntry.CONTENT_URI, values);
+    }
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu options from the res/menu/menu_catalog.xml file.
@@ -113,7 +83,7 @@ public class CatalogActivity extends AppCompatActivity {
         switch (item.getItemId()) {
             // Respond to a click on the "Insert dummy data" menu option
             case R.id.action_insert_data:
-                // Do nothing for now
+                insertBook();
                 return true;
             // Respond to a click on the "Delete all entries" menu option
             case R.id.action_delete_all_entries:
@@ -121,5 +91,28 @@ public class CatalogActivity extends AppCompatActivity {
                 return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
+        String[] projection = {
+                BookEntry._ID,
+                BookEntry.COLUMN_BOOK_NAME,
+                BookEntry.COLUMN_BOOK_PRICE,
+                BookEntry.COLUMN_BOOK_QUANTITY,
+                BookEntry.COLUMN_BOOK_SUPPLIER_NAME,
+                BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER
+        };
+    return new CursorLoader(this, BookEntry.CONTENT_URI, projection, null, null, null);
+    }
+
+    @Override
+    public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
+        mCursorAdapter.swapCursor(data);
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Cursor> loader) {
+        mCursorAdapter.swapCursor(null);
     }
 }
