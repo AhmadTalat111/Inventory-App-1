@@ -1,14 +1,22 @@
 package com.example.android.mybooks;
 
+import android.app.AlertDialog;
+import android.app.LoaderManager;
 import android.content.ContentValues;
+import android.content.CursorLoader;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.Loader;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.NavUtils;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -16,141 +24,309 @@ import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
 
-import com.example.android.mybooks.data.BookContract.BookEntry;
-
-public class EditorActivity extends AppCompatActivity {
-
-    private EditText mNameEditText;
-
-    private EditText mPriceEditText;
-
-    private EditText mQuantityEditText;
-
-    private Spinner mSupplierSpinner;
-    private EditText mSupplierPhoneEditText;
+import com.example.android.mybooks.data.BookContract;
 
 
-    private int mSupplier = 0;
+public class EditorActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor> {
+
+    private static final int EXISTING_INVENTORY_LOADER = 0;
+    private Uri mCurrentProductUri;
+
+    private EditText mProductNameEditText;
+    private EditText mProductPriceEditText;
+    private EditText mProductQuantityEditText;
+    private Spinner mProductSupplieNameSpinner;
+    private EditText mProductSupplierPhoneNumberEditText;
+
+    private int mSupplieName = BookContract.BookEntry.SUPPLIER_UNKNOWN;
+
+    private boolean mProductHasChanged = false;
+
+    private View.OnTouchListener mTouchListener = new View.OnTouchListener() {
+        @Override
+        public boolean onTouch(View view, MotionEvent motionEvent) {
+            mProductHasChanged = true;
+            return false;
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_editor);
         Intent intent = getIntent();
-        Uri currentBookUri = intent.getData();
+        mCurrentProductUri = intent.getData();
 
-        if(currentBookUri == null){
-            setTitle(R.string.editor_activity_title_new_book);
+        if (mCurrentProductUri == null) {
+            setTitle(getString(R.string.add_book));
+            invalidateOptionsMenu();
         } else {
-            setTitle(R.string.editor_activity_title_edit_book);
+            setTitle(getString(R.string.edit_product));
+            getLoaderManager().initLoader(EXISTING_INVENTORY_LOADER, null, this);
         }
 
-        // Find all relevant views that we will need to read user input from
-        mNameEditText = (EditText) findViewById(R.id.edit_book_name);
-        mPriceEditText = (EditText) findViewById(R.id.edit_book_price);
-        mQuantityEditText = (EditText) findViewById(R.id.edit_book_quantity);
-        mSupplierSpinner = (Spinner) findViewById(R.id.spinner_supplier);
-        mSupplierPhoneEditText = (EditText) findViewById(R.id.edit_supplier_phone);
+        mProductNameEditText = findViewById(R.id.edit_book_name);
+        mProductPriceEditText = findViewById(R.id.edit_book_price);
+        mProductQuantityEditText = findViewById(R.id.edit_book_quantity);
+        mProductSupplieNameSpinner = findViewById(R.id.spinner_supplier);
+        mProductSupplierPhoneNumberEditText = findViewById(R.id.edit_supplier_phone);
+
+        mProductNameEditText.setOnTouchListener(mTouchListener);
+        mProductPriceEditText.setOnTouchListener(mTouchListener);
+        mProductQuantityEditText.setOnTouchListener(mTouchListener);
+        mProductSupplieNameSpinner.setOnTouchListener(mTouchListener);
+        mProductSupplierPhoneNumberEditText.setOnTouchListener(mTouchListener);
 
         setupSpinner();
     }
 
-
     private void setupSpinner() {
-        // Create adapter for spinner. The list options are from the String array it will use
-        // the spinner will use the default layout
-        ArrayAdapter genderSpinnerAdapter = ArrayAdapter.createFromResource(this,
+        ArrayAdapter productSupplieNameSpinnerAdapter = ArrayAdapter.createFromResource(this,
                 R.array.array_supplier_options, android.R.layout.simple_spinner_item);
 
-        // Specify dropdown layout style - simple list view with 1 item per line
-        genderSpinnerAdapter.setDropDownViewResource(android.R.layout.simple_dropdown_item_1line);
+        productSupplieNameSpinnerAdapter.setDropDownViewResource(android.R.layout.simple_dropdown_item_1line);
 
-        // Apply the adapter to the spinner
-        mSupplierSpinner.setAdapter(genderSpinnerAdapter);
+        mProductSupplieNameSpinner.setAdapter(productSupplieNameSpinnerAdapter);
 
-        // Set the integer mSelected to the constant values
-        mSupplierSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        mProductSupplieNameSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                String selection = (String) parent.getItemAtPosition(position);
-                if (!TextUtils.isEmpty(selection)) {
-                    if (selection.equals(getString(R.string.supplier_jarir))) {
-                        mSupplier = 1;
-                    } else if (selection.equals(getString(R.string.supplier_Nashron))) {
-                        mSupplier = 2;
-                    } else {
-                        mSupplier = 0;
-                    }
+                if (position == 1) {
+                    mSupplieName = BookContract.BookEntry.SUPPLIER_JARIRR;
+                } else if (position == 2) {
+                    mSupplieName = BookContract.BookEntry.SUPPLIER_NASHRON;
+                } else {
+                    mSupplieName = BookContract.BookEntry.SUPPLIER_UNKNOWN;
                 }
             }
 
-            // Because AdapterView is an abstract class, onNothingSelected must be defined
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
-                mSupplier = 0; // Unknown
+                mSupplieName = BookContract.BookEntry.SUPPLIER_UNKNOWN;
             }
         });
     }
 
-    private void insertProduct() {
-        String bookNameString = mNameEditText.getText().toString().trim();
 
-        String bookPriceString = mPriceEditText.getText().toString().trim();
-        int bookPriceInteger = Integer.parseInt(bookPriceString);
+    private void saveProduct() {
+        String productNameString = mProductNameEditText.getText().toString().trim();
+        String productPriceString = mProductPriceEditText.getText().toString().trim();
+        String productQuantityString = mProductQuantityEditText.getText().toString().trim();
+        String productSupplierPhoneNumberString = mProductSupplierPhoneNumberEditText.getText().toString().trim();
+        if (mCurrentProductUri == null) {
+            if (TextUtils.isEmpty(productNameString)) {
+                Toast.makeText(this, getString(R.string.name_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (TextUtils.isEmpty(productPriceString)) {
+                Toast.makeText(this, getString(R.string.price_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (TextUtils.isEmpty(productQuantityString)) {
+                Toast.makeText(this, getString(R.string.quantity_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (mSupplieName == BookContract.BookEntry.SUPPLIER_UNKNOWN) {
+                Toast.makeText(this, getString(R.string.supplier_name_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (TextUtils.isEmpty(productSupplierPhoneNumberString)) {
+                Toast.makeText(this, getString(R.string.supplier_phone_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
 
-        String bookQuantityString = mQuantityEditText.getText().toString().trim();
-        int bookQuantityInteger = Integer.parseInt(bookQuantityString);
+            ContentValues values = new ContentValues();
 
-        String bookSupplierPhoneNumberString = mSupplierPhoneEditText.getText().toString().trim();
-        int supplierPhoneNumberInteger = Integer.parseInt(bookSupplierPhoneNumberString);
+            values.put(BookContract.BookEntry.COLUMN_BOOK_NAME, productNameString);
+            values.put(BookContract.BookEntry.COLUMN_BOOK_PRICE, productPriceString);
+            values.put(BookContract.BookEntry.COLUMN_BOOK_QUANTITY, productQuantityString);
+            values.put(BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME, mSupplieName);
+            values.put(BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER, productSupplierPhoneNumberString);
 
+            Uri newUri = getContentResolver().insert(BookContract.BookEntry.CONTENT_URI, values);
 
-
-        ContentValues values = new ContentValues();
-        values.put(BookEntry.COLUMN_BOOK_NAME, bookNameString);
-        values.put(BookEntry.COLUMN_BOOK_PRICE, bookPriceInteger);
-        values.put(BookEntry.COLUMN_BOOK_QUANTITY, bookQuantityInteger);
-        values.put(BookEntry.COLUMN_BOOK_SUPPLIER_NAME, mSupplier);
-        values.put(BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER, supplierPhoneNumberInteger);
-
-        Uri newUri = getContentResolver().insert(BookEntry.CONTENT_URI, values);
-
-        if (newUri == null) {
-            Toast.makeText(this, getString(R.string.editor_insert_book_failed),
-                    Toast.LENGTH_SHORT).show();
-
+            if (newUri == null) {
+                Toast.makeText(this, getString(R.string.insert_failed),
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, getString(R.string.insert_successful),
+                        Toast.LENGTH_SHORT).show();
+                finish();
+            }
         } else {
-            Toast.makeText(this, getString(R.string.editor_insert_book_successful),
-                    Toast.LENGTH_SHORT).show();
+
+            if (TextUtils.isEmpty(productNameString)) {
+                Toast.makeText(this, getString(R.string.name_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (TextUtils.isEmpty(productPriceString)) {
+                Toast.makeText(this, getString(R.string.price_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (TextUtils.isEmpty(productQuantityString)) {
+                Toast.makeText(this, getString(R.string.quantity_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (mSupplieName == BookContract.BookEntry.SUPPLIER_UNKNOWN) {
+                Toast.makeText(this, getString(R.string.supplier_name_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (TextUtils.isEmpty(productSupplierPhoneNumberString)) {
+                Toast.makeText(this, getString(R.string.supplier_phone_requires), Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            ContentValues values = new ContentValues();
+
+            values.put(BookContract.BookEntry.COLUMN_BOOK_NAME, productNameString);
+            values.put(BookContract.BookEntry.COLUMN_BOOK_PRICE, productPriceString);
+            values.put(BookContract.BookEntry.COLUMN_BOOK_QUANTITY, productQuantityString);
+            values.put(BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME, mSupplieName);
+            values.put(BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER, productSupplierPhoneNumberString);
+
+
+            int rowsAffected = getContentResolver().update(mCurrentProductUri, values, null, null);
+            if (rowsAffected == 0) {
+                Toast.makeText(this, getString(R.string.update_failed),
+                        Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, getString(R.string.update_successful),
+                        Toast.LENGTH_SHORT).show();
+                finish();
+            }
+
         }
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu options from the res/menu/menu_editor.xml file.
-        // This adds menu items to the app bar.
         getMenuInflater().inflate(R.menu.menu_editor, menu);
+        Log.d("message", "open Editor Activity");
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // User clicked on a menu option in the app bar overflow menu
         switch (item.getItemId()) {
-            // Respond to a click on the "Save" menu option
             case R.id.action_save:
-                insertProduct();
+                saveProduct();
                 return true;
-            // Respond to a click on the "Delete" menu option
-            case R.id.action_delete:
-                // Do nothing for now
-                return true;
-            // Respond to a click on the "Up" arrow button in the app bar
             case android.R.id.home:
-                // Navigate back to parent activity (CatalogActivity)
-                NavUtils.navigateUpFromSameTask(this);
+                if (!mProductHasChanged) {
+                    NavUtils.navigateUpFromSameTask(EditorActivity.this);
+                    return true;
+                }
+                DialogInterface.OnClickListener discardButtonClickListener =
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                NavUtils.navigateUpFromSameTask(EditorActivity.this);
+                            }
+                        };
+                showUnsavedChangesDialog(discardButtonClickListener);
                 return true;
         }
         return super.onOptionsItemSelected(item);
     }
+
+    @Override
+    public void onBackPressed() {
+        if (!mProductHasChanged) {
+            super.onBackPressed();
+            return;
+        }
+        DialogInterface.OnClickListener discardButtonClickListener =
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        finish();
+                    }
+                };
+
+        showUnsavedChangesDialog(discardButtonClickListener);
+    }
+
+    @Override
+    public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
+        String[] projection = {
+                BookContract.BookEntry._ID,
+                BookContract.BookEntry.COLUMN_BOOK_NAME,
+                BookContract.BookEntry.COLUMN_BOOK_PRICE,
+                BookContract.BookEntry.COLUMN_BOOK_QUANTITY,
+                BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME,
+                BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER
+        };
+        return new CursorLoader(this,
+                mCurrentProductUri,
+                projection,
+                null,
+                null,
+                null);
+    }
+
+    @Override
+    public void onLoadFinished(Loader<Cursor> loader, Cursor cursor) {
+        if (cursor == null || cursor.getCount() < 1) {
+            return;
+        }
+        if (cursor.moveToFirst()) {
+            int nameColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_BOOK_NAME);
+            int priceColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_BOOK_PRICE);
+            int quantityColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_BOOK_QUANTITY);
+            int supplierNameColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_BOOK_SUPPLIER_NAME);
+            int supplierPhoneColumnIndex = cursor.getColumnIndex(BookContract.BookEntry.COLUMN_SUPPLIER_PHONE_NUMBER);
+
+            String currentName = cursor.getString(nameColumnIndex);
+            int currentPrice = cursor.getInt(priceColumnIndex);
+            int currentQuantity = cursor.getInt(quantityColumnIndex);
+            int currentSupplierName = cursor.getInt(supplierNameColumnIndex);
+            int currentSupplierPhone = cursor.getInt(supplierPhoneColumnIndex);
+
+            mProductNameEditText.setText(currentName);
+            mProductPriceEditText.setText(Integer.toString(currentPrice));
+            mProductQuantityEditText.setText(Integer.toString(currentQuantity));
+            mProductSupplierPhoneNumberEditText.setText(Integer.toString(currentSupplierPhone));
+
+            switch (currentSupplierName) {
+
+                case BookContract.BookEntry.SUPPLIER_JARIRR:
+                    mProductSupplieNameSpinner.setSelection(1);
+                    break;
+                case BookContract.BookEntry.SUPPLIER_NASHRON:
+                    mProductSupplieNameSpinner.setSelection(2);
+                    break;
+                default:
+                    mProductSupplieNameSpinner.setSelection(0);
+                    break;
+            }
+        }
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Cursor> loader) {
+        mProductNameEditText.setText("");
+        mProductPriceEditText.setText("");
+        mProductQuantityEditText.setText("");
+        mProductSupplierPhoneNumberEditText.setText("");
+        mProductSupplieNameSpinner.setSelection(0);
+    }
+
+    private void showUnsavedChangesDialog(
+            DialogInterface.OnClickListener discardButtonClickListener) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setMessage(R.string.unsaved_changes_dialog_msg);
+        builder.setPositiveButton(R.string.discard, discardButtonClickListener);
+        builder.setNegativeButton(R.string.keep_editing, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                if (dialog != null) {
+                    dialog.dismiss();
+                }
+            }
+        });
+
+        AlertDialog alertDialog = builder.create();
+        alertDialog.show();
+    }
+
+
 }
